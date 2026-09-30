@@ -36,7 +36,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-ffc4e54b.js";
+            window.path_to_searchindex_js = "../searchindex-e6a11cb0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-d7504e7d.js"></script>
@@ -224,7 +224,7 @@ local path overrides, not the default dependency catalog.</p>
 <tr><td><code>version</code></td><td>string</td><td>manifest value</td><td>Optional Firecracker release override for auto-download</td></tr>
 <tr><td><code>url</code></td><td>string</td><td>manifest value</td><td>Optional download URL template override with <code>{version}</code> and <code>{arch}</code> placeholders</td></tr>
 <tr><td><code>binary_path</code></td><td>string</td><td>derived from manifest/config version</td><td>Explicit path to a local <code>firecracker</code> binary. Setup skips the Firecracker download and requires this to be a readable, non-empty, executable regular file</td></tr>
-<tr><td><code>boot_args</code></td><td>string</td><td><code>"console=ttyS0 reboot=k panic=1 pci=off init=/init …"</code></td><td>Kernel command line arguments. The shipped default also includes DAMON memory-reclaim parameters; see <code>config/default.toml</code> for the full value.</td></tr>
+<tr><td><code>boot_args</code></td><td>string</td><td><code>"console=ttyS0 reboot=k panic=1 pci=off init=/init …"</code></td><td>Complete kernel command line. The shipped default also includes DAMON memory-reclaim and free-page-reporting parameters; see <code>config/default.toml</code> for the full value.</td></tr>
 <tr><td><code>allowed_extra_boot_args_prefixes</code></td><td>array of strings</td><td><code>[]</code></td><td>Allowed prefixes for <code>extraBootArgs</code> on cold-start sandboxes. If empty, no request-provided extra boot args are appended</td></tr>
 <tr><td><code>socket_timeout_secs</code></td><td>integer</td><td><code>3</code></td><td>Max seconds to wait for the Firecracker API socket</td></tr>
 <tr><td><code>socket_poll_ms</code></td><td>integer</td><td><code>1</code></td><td>Poll interval (ms) for checking socket availability</td></tr>
