@@ -37,7 +37,10 @@ func NewSnapshotter(root string) (*Snapshotter, error) {
 		root:  root,
 		snaps: make(map[string]*snapshot),
 	}
-	config := s.getConfig()
+	config, err := s.getConfig()
+	if err != nil {
+		return nil, err
+	}
 	log.Printf("[DEBUG] loaded config with %d entries", len(config))
 	for k, v := range config {
 		log.Printf("[DEBUG]   %s -> %s", k, v)
@@ -50,21 +53,33 @@ func (s *Snapshotter) configPath() string {
 }
 
 // getConfig reads the config file from disk every time (no caching).
-func (s *Snapshotter) getConfig() map[string]string {
+func (s *Snapshotter) getConfig() (map[string]string, error) {
 	config := make(map[string]string)
-	data, err := os.ReadFile(s.configPath())
-	if err != nil {
-		return config
+	path := s.configPath()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return config, nil
 	}
-	json.Unmarshal(data, &config)
-	return config
+	if err != nil {
+		return nil, fmt.Errorf("read config %q: %w", path, err)
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("parse config %q: %w", path, err)
+	}
+	if config == nil {
+		return nil, fmt.Errorf("parse config %q: expected a JSON object", path)
+	}
+	return config, nil
 }
 
 // RegisterRootfs adds a chain ID → rootfs mapping and persists it atomically.
 func (s *Snapshotter) RegisterRootfs(chainID, rootfsPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	config := s.getConfig()
+	config, err := s.getConfig()
+	if err != nil {
+		return err
+	}
 	config[chainID] = rootfsPath
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -90,19 +105,22 @@ func (s *Snapshotter) RegisterRootfs(chainID, rootfsPath string) error {
 // configuredRootfs returns the rootfs path if the key is registered in config.
 // Handles namespaced keys like "moby/2/sha256:abc..." by also checking the
 // bare chain ID ("sha256:abc...").
-func (s *Snapshotter) configuredRootfs(key string) (string, bool) {
-	config := s.getConfig()
+func (s *Snapshotter) configuredRootfs(key string) (string, bool, error) {
+	config, err := s.getConfig()
+	if err != nil {
+		return "", false, err
+	}
 	if p, ok := config[key]; ok {
-		return p, true
+		return p, true, nil
 	}
 	// Strip namespace prefix (e.g. "moby/2/") and retry
 	if i := strings.LastIndex(key, "/sha256:"); i >= 0 {
 		bare := key[i+1:]
 		if p, ok := config[bare]; ok {
-			return p, true
+			return p, true, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 func (s *Snapshotter) Stat(ctx context.Context, key string) (snapshots.Info, error) {
@@ -115,7 +133,11 @@ func (s *Snapshotter) Stat(ctx context.Context, key string) (snapshots.Info, err
 	}
 
 	// Check persistent config (for surviving restarts)
-	if _, ok := s.configuredRootfs(key); ok {
+	_, ok, err := s.configuredRootfs(key)
+	if err != nil {
+		return snapshots.Info{}, err
+	}
+	if ok {
 		log.Printf("[DEBUG] Stat(%q) -> found in config", key)
 		return snapshots.Info{
 			Name:    key,
@@ -166,7 +188,11 @@ func (s *Snapshotter) Mounts(ctx context.Context, key string) ([]mount.Mount, er
 		log.Printf("[DEBUG] Mounts(%q) -> memory rootfs=%s", key, sn.rootfs)
 		return bindMount(sn.rootfs), nil
 	}
-	if rootfs, ok := s.configuredRootfs(key); ok {
+	rootfs, ok, err := s.configuredRootfs(key)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
 		log.Printf("[DEBUG] Mounts(%q) -> config rootfs=%s", key, rootfs)
 		return bindMount(rootfs), nil
 	}
@@ -201,7 +227,11 @@ func (s *Snapshotter) createSnapshot(ctx context.Context, kind snapshots.Kind, k
 	rootfs := ""
 	source := "none"
 	if parent != "" {
-		if r, ok := s.configuredRootfs(parent); ok {
+		r, ok, err := s.configuredRootfs(parent)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			rootfs = r
 			source = "config"
 		}
@@ -278,7 +308,10 @@ func (s *Snapshotter) Walk(ctx context.Context, fn snapshots.WalkFunc, filters .
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	config := s.getConfig()
+	config, err := s.getConfig()
+	if err != nil {
+		return err
+	}
 	log.Printf("[DEBUG] Walk(filters=%v) snaps=%d config=%d", filters, len(s.snaps), len(config))
 
 	for _, sn := range s.snaps {

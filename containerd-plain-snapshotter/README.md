@@ -163,6 +163,8 @@ plain-snapshotter register [flags] <镜像名> <rootfs路径>
 
 key 是镜像层的 chain ID，value 是 rootfs 目录的绝对路径。由 `register` 命令自动维护，一般不需要手动编辑。
 
+配置文件不存在时视为空映射。文件读取或 JSON 解码失败、或顶层为 `null` 时，会报错并保留原文件，修正后可重试。
+
 ## 注意事项
 
 - 容器直接读写你的 rootfs 目录，多个容器共享同一个 rootfs 时请注意数据冲突
